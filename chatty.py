@@ -8,6 +8,9 @@ class Message:
         self.date = self._parse_date_()
         self.sender = self._parse_sender_()
         self.message = self._parse_message_()
+        self.is_call = "Llamada" in self.message and ("min" in self.message or "h" in self.message)
+        self.is_videocall = "Videollamada" in self.message and ("min" in self.message or "h" in self.message)
+        self.duration = self._get_duration()
     
     def __str__(self):
         return f"{self.date} - {self.sender}: {self.message}"
@@ -19,8 +22,6 @@ class Message:
             char = self.line[i]
             if char == ']':
                 break
-            if char == '\u202f':
-                date_str += " "
             else:
                 date_str += char
             i += 1
@@ -61,6 +62,17 @@ class Message:
     
     def get_message_length(self):
         return len(self.message.split())
+    
+    def _get_duration(self):
+        if self.is_call or self.is_videocall:
+            num = self.message.split()[-2]
+            metric = self.message.split()[-1]
+            if metric == "min":
+                return int(num)
+            elif metric == "h":
+                return int(num) * 60
+        return None
+            
 
 class Chatty:
     def __init__(self, file):
@@ -72,17 +84,22 @@ class Chatty:
             return False
         if line[0] == '[':
             return True
+        elif line[1] == '[':
+            return True
         return False    
 
     def open_file(self):
         f = open(self.file, "r")
         line = f.readline()
-        c = 0
         while line:
             line = f.readline()
-            c += 1
-            if self._is_start_of_message_(line):
-                self.messages.append(Message(line))
+            line = line.replace('\u200e', ' ').replace('\u202f', ' ')
+            if not line or len(line) < 2:
+                continue
+            if line[0] == '[':
+                 self.messages.append(Message(line))
+            elif line[1] == '[':
+                 self.messages.append(Message(line[1:]))
         print(f"Total lines read: {c}")
         f.close()
 
@@ -123,6 +140,23 @@ class Chatty:
     
     def get_message_by_message(self, message):
         return [m for m in self.messages if m.get_message() == message]
+    
+    def get_total_images(self):
+        return len([m for m in self.messages if "imagen omitida" in m.get_message()])
+    
+    def get_videocalls(self):
+        return [m for m in self.messages if m.is_videocall]
+
+    def get_calls(self):
+        return [m for m in self.messages if m.is_call]
+    
+    def get_total_minutes_in_calls(self):
+        return sum([m.duration for m in self.get_calls()])
+    
+    def get_total_minutes_in_videocalls(self):
+        return sum([m.duration for m in self.get_videocalls()])
+
+
 
 if __name__ == "__main__": 
     c = Chatty("_chat.txt")
@@ -130,5 +164,9 @@ if __name__ == "__main__":
     m = c.get_messages_by_date(datetime(2024, 7, 2))
     for message in m:
         print(message)
+    print(f"Total images: {c.get_total_images()}")
+    print(f"Total mins in calls: {c.get_total_minutes_in_calls()}")
+    print(f"Total mins in videocalls: {c.get_total_minutes_in_videocalls()}")
+    print(f"Total mins in videocalls + calls: {c.get_total_minutes_in_videocalls() + c.get_total_minutes_in_calls()}")
 
     
